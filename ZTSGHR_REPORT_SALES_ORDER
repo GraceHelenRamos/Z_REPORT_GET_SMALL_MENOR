@@ -1,0 +1,462 @@
+*&---------------------------------------------------------------------* 
+*& Report  ZTSGHR_REPORT_SALES_ORDER_VH 
+*& 
+*&---------------------------------------------------------------------* 
+*& 
+*& 
+*&---------------------------------------------------------------------* 
+ 
+report  ztsghr_report_sales_order_vh. 
+ 
+types: begin of y_vbak, 
+        vbeln type vbak-vbeln, 
+        erdat type vbak-erdat, 
+        vbtyp type vbak-vbtyp , 
+        auart type vbak-auart , 
+      end of y_vbak, 
+ 
+      begin of y_vbap, 
+        vbeln type vbap-vbeln, 
+        posnr type vbap-posnr, 
+        matnr type vbap-matnr, 
+        matwa type vbap-matwa, 
+        pmatn type vbap-pmatn, 
+        charg type vbap-charg, 
+        matkl type vbap-matkl, 
+      end of y_vbap, 
+ 
+      begin of y_vbep, 
+        vbeln type vbep-vbeln, 
+        posnr type vbep-posnr, 
+        etenr type vbep-etenr, 
+        wmeng type vbep-wmeng, 
+        bmeng type vbep-bmeng, 
+        vrkme type vbep-vrkme, 
+        lmeng type vbep-lmeng, 
+        meins type vbep-meins, 
+      end of y_vbep, 
+ 
+      begin of y_makt, 
+        matnr type makt-matnr, 
+        spras type makt-spras, 
+        maktx type makt-maktx, 
+      end of y_makt, 
+ 
+      y_t_vbak         type sorted table of y_vbak with unique key vbeln, 
+      y_t_vbap         type sorted table of y_vbap with unique key vbeln posnr, 
+      y_t_vbep         type sorted table of y_vbep with unique key vbeln posnr etenr, 
+      y_t_makt         type sorted table of y_makt with unique key matnr spras, 
+      y_t_sales_orders type standard table of zstghr_report_sales_order_vh. 
+ 
+data: w_vbak type vbak, 
+      w_vbap type vbap. 
+ 
+constants: c_rpr_sales_order type dd02l-tabname value'ZSTGHR_REPORT_SALES_ORDER_VH'. 
+ 
+selection-screen: begin of block b1 with frame title text-t01. 
+select-options: s_vbeln for w_vbak-vbeln, 
+                s_erdat for w_vbak-erdat, 
+                s_vbtyp for w_vbak-vbtyp, 
+                s_auart for w_vbak-auart, 
+                s_matnr for w_vbap-matnr. 
+selection-screen:end of block b1. 
+ 
+perform zf_process_sales_order. 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_PROCESS_SALES_ORDER 
+*&---------------------------------------------------------------------* 
+form zf_process_sales_order . 
+ 
+  data: lt_vbak         type y_t_vbak, 
+        lt_vbap         type y_t_vbap, 
+        lt_vbep         type y_t_vbep, 
+        lt_makt         type y_t_makt, 
+        lt_sales_orders type y_t_sales_orders. 
+ 
+  perform zf_read_vbak_by_selscreen changing lt_vbak. 
+  if lt_vbak is initial. 
+    message text-001 type 'E'. 
+    return. 
+  endif. 
+ 
+  perform zf_read_vbap_by_vbak using lt_vbak 
+                            changing lt_vbap. 
+ 
+  perform zf_read_vbep_by_vbap using lt_vbap 
+                            changing lt_vbep. 
+ 
+  perform zf_read_makt_by_vbap using lt_vbap 
+                            changing lt_makt. 
+ 
+  perform zf_fill_sales_orders using lt_vbak 
+                                     lt_vbap 
+                                     lt_vbep 
+                                     lt_makt 
+                            changing lt_sales_orders. 
+ 
+  perform zf_menor_item changing lt_sales_orders. 
+ 
+  perform zf_maior_item changing lt_sales_orders. 
+ 
+  perform zf_menor_quantidade changing lt_sales_orders. 
+ 
+  perform zf_maior_quantidade changing lt_sales_orders. 
+ 
+  perform zf_show_report using lt_sales_orders. 
+ 
+endform.                    " ZF_PROCESS_SALES_ORDER 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_READ_VBAK_BY_SELSCREEN 
+*&---------------------------------------------------------------------* 
+form zf_read_vbak_by_selscreen  changing pt_vbak type y_t_vbak. 
+ 
+  clear: pt_vbak. 
+ 
+  select vbeln  erdat 
+         vbtyp auart 
+    from vbak 
+    into table pt_vbak 
+    where vbeln in s_vbeln 
+      and erdat in s_erdat 
+      and vbtyp in s_vbtyp 
+      and auart in s_auart. 
+ 
+endform.                    " ZF_READ_VABK_BY_SELSCREEN 
+*&---------------------------------------------------------------------* 
+*&      Form  zf_read_vbap_by_vbak 
+*&---------------------------------------------------------------------* 
+form zf_read_vbap_by_vbak using pt_vbak type y_t_vbak 
+                       changing pt_vbap type y_t_vbap. 
+ 
+  clear:pt_vbap. 
+ 
+  if pt_vbak is initial.return. endif. 
+ 
+  select vbeln  posnr 
+         matnr  matwa 
+         pmatn  charg  matkl 
+    from vbap 
+    into table pt_vbap 
+    for all entries in pt_vbak 
+    where vbeln eq pt_vbak-vbeln 
+      and matnr in s_matnr. 
+ 
+endform.                    " ZF_READ_VBAK_BY_VBAP 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_READ_VBEP_BY_VBAP 
+*&---------------------------------------------------------------------* 
+form zf_read_vbep_by_vbap using pt_vbap type y_t_vbap 
+                       changing pt_vbep type y_t_vbep. 
+ 
+  clear: pt_vbep. 
+ 
+  if pt_vbap is initial.return. endif. 
+ 
+  select vbeln   posnr  etenr 
+         wmeng   bmeng vrkme 
+         lmeng  meins 
+    from vbep 
+    into table pt_vbep 
+    for all entries in pt_vbap 
+    where vbeln eq pt_vbap-vbeln 
+      and posnr eq pt_vbap-posnr. 
+ 
+endform.                    " ZF_READ_VBEP_BY_VBAP 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_READ_MAKT_BY_VBAP 
+*&---------------------------------------------------------------------* 
+form zf_read_makt_by_vbap using pt_vbap type y_t_vbap 
+                       changing pt_makt type y_t_makt. 
+ 
+  clear: pt_makt. 
+ 
+  if pt_vbap is initial.return. endif. 
+ 
+  select matnr spras maktx 
+    from makt 
+    into table pt_makt 
+    for all entries in pt_vbap 
+    where matnr eq pt_vbap-matnr 
+      and spras eq sy-langu. 
+ 
+endform.                    " ZF_READ_MAKT_BY_VBAP 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_FILL_SALES_ORDERS 
+*&---------------------------------------------------------------------* 
+form zf_fill_sales_orders using pt_vbak         type y_t_vbak 
+                                pt_vbap         type y_t_vbap 
+                                pt_vbep         type y_t_vbep 
+                                pt_makt         type y_t_makt 
+                       changing pt_sales_orders type y_t_sales_orders. 
+ 
+  data: lw_sales_order like line of pt_sales_orders, 
+         v_posnr       type vbep-posnr. 
+ 
+  field-symbols: <fs_vbak> like line of pt_vbak, 
+                 <fs_vbap> like line of pt_vbap, 
+                 <fs_vbep> like line of pt_vbep, 
+                 <fs_makt> like line of pt_makt. 
+ 
+  clear: pt_sales_orders. 
+ 
+  loop at pt_vbak assigning <fs_vbak>. 
+ 
+    loop at pt_vbap assigning <fs_vbap> where vbeln =  <fs_vbak>-vbeln. 
+ 
+      loop at pt_vbep assigning <fs_vbep>  where vbeln = <fs_vbap>-vbeln 
+                                             and posnr = <fs_vbap>-posnr. 
+        clear: lw_sales_order. 
+ 
+        move-corresponding <fs_vbak> to lw_sales_order. 
+        move-corresponding <fs_vbap> to lw_sales_order. 
+        move-corresponding <fs_vbep> to lw_sales_order. 
+ 
+        read table pt_makt assigning <fs_makt> with key matnr = <fs_vbap>-matnr. 
+        if sy-subrc is not initial. return. endif. 
+ 
+        move-corresponding <fs_makt> to lw_sales_order. 
+ 
+        if <fs_vbap>-vbeln eq lw_sales_order-vbeln and <fs_vbep>-posnr < v_posnr. 
+          lw_sales_order-first_item = abap_true. 
+        endif. 
+ 
+        append lw_sales_order to pt_sales_orders. 
+ 
+      endloop. 
+    endloop. 
+  endloop. 
+ 
+endform.                    " ZF_FILL_SALES_ORDERS 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_SHOW_REPORT 
+*&---------------------------------------------------------------------* 
+form zf_show_report  using pt_sales_orders type y_t_sales_orders. 
+ 
+  call function 'REUSE_ALV_GRID_DISPLAY' 
+    exporting 
+      i_callback_program = sy-cprog 
+      i_structure_name   = c_rpr_sales_order 
+    tables 
+      t_outtab           = pt_sales_orders 
+    exceptions 
+      program_error      = 1 
+      others             = 2. 
+  if sy-subrc <> 0. 
+    message id sy-msgid type sy-msgty number sy-msgno 
+            with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4. 
+  endif. 
+ 
+endform.                    " ZF_SHOW_REPORT 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_MAIOR_ITEM 
+*&---------------------------------------------------------------------* 
+form zf_maior_item changing pt_sales_orders  type y_t_sales_orders. 
+ 
+  data: v_last_posnr type vbap-posnr, 
+        l_atual_vbeln type vbak-vbeln, 
+        l_tabix       type sy-subrc, 
+        l_maior_tabix type sy-subrc. 
+ 
+  field-symbols: <fs_sales_order> like line of pt_sales_orders, 
+                 <fs_ultimo_item> like line of pt_sales_orders. 
+ 
+  loop at pt_sales_orders assigning <fs_sales_order>. 
+    l_tabix = sy-tabix. 
+ 
+* Regra do Vbeln. 
+    if l_atual_vbeln is initial or l_atual_vbeln ne <fs_sales_order>-vbeln. 
+      l_atual_vbeln = <fs_sales_order>-vbeln. 
+      clear: l_maior_tabix, 
+             v_last_posnr. 
+    endif. 
+ 
+*ultimo item 
+    if v_last_posnr is initial or v_last_posnr <= <fs_sales_order>-posnr. 
+      v_last_posnr = <fs_sales_order>-posnr. 
+      <fs_sales_order>-last_item = abap_true. 
+ 
+*      Só estou lendo a linha, e posso fazer o que eu quiser com ela, nesse caso estou usando o index para apagar o campo que preciso. 
+      read table pt_sales_orders assigning <fs_ultimo_item> index l_maior_tabix. 
+      if sy-subrc is initial. 
+        clear: <fs_ultimo_item>-last_item. 
+      endif. 
+      l_maior_tabix = l_tabix. 
+    endif. 
+  endloop. 
+ 
+endform.                    " ZF_MAIOR_ITEM 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_MENOR_ITEM 
+*&---------------------------------------------------------------------* 
+form zf_menor_item changing pt_sales_orders  type y_t_sales_orders. 
+ 
+  data: v_first_posnr type vbap-posnr, 
+        l_tabix       type sy-subrc, 
+        l_menor_tabix type sy-subrc, 
+        l_atual_vbeln type vbak-vbeln. 
+ 
+  field-symbols: <fs_sales_order> like line of pt_sales_orders, 
+                 <fs_menor_item>  like line of pt_sales_orders. 
+ 
+  loop at pt_sales_orders assigning <fs_sales_order>. 
+    l_tabix = sy-tabix. 
+ 
+*    Verifica se o vbeln 
+    if l_atual_vbeln is initial or l_atual_vbeln ne <fs_sales_order>-vbeln . 
+      l_atual_vbeln = <fs_sales_order>-vbeln. 
+      clear: l_menor_tabix, v_first_posnr . 
+    endif. 
+ 
+* regra do menor posnr 
+    if v_first_posnr is initial or v_first_posnr >= <fs_sales_order>-posnr. 
+      v_first_posnr = <fs_sales_order>-posnr. 
+      <fs_sales_order>-first_item = abap_true. 
+ 
+      read table pt_sales_orders assigning <fs_menor_item> index l_menor_tabix. 
+      if sy-subrc is initial. 
+        clear: <fs_sales_order>-first_item. 
+      endif. 
+ 
+      l_menor_tabix = l_tabix. 
+ 
+    endif. 
+  endloop. 
+ 
+endform.                    " ZF_MENOR_ITEM 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_MAIOR_QUANTIDADE 
+*&---------------------------------------------------------------------* 
+form zf_maior_quantidade changing pt_sales_orders  type y_t_sales_orders. 
+ 
+  data: v_posnr       type vbap-posnr, 
+          v_atual_valor type vbep-wmeng, 
+          l_tabix       type sy-subrc, 
+          l_menor_tabix type sy-subrc, 
+          v_etenr_atual type vbep-etenr, 
+          l_atual_vbeln type vbak-vbeln. 
+ 
+  field-symbols: <fs_sales_order> like line of pt_sales_orders, 
+                 <fs_menor_item>  like line of pt_sales_orders. 
+ 
+  loop at pt_sales_orders assigning <fs_sales_order>. 
+    l_tabix = sy-tabix. 
+ 
+    if v_posnr is initial or v_posnr ne <fs_sales_order>-posnr. 
+      v_posnr = <fs_sales_order>-posnr. 
+      l_atual_vbeln = <fs_sales_order>-vbeln. 
+ 
+      clear: l_menor_tabix, 
+             v_atual_valor, 
+             v_etenr_atual. 
+ 
+      if v_atual_valor is initial or v_atual_valor <= <fs_sales_order>-wmeng. 
+        v_atual_valor = <fs_sales_order>-wmeng. 
+        <fs_sales_order>-greater_quantity = abap_true. 
+      endif. 
+ 
+    else. 
+ 
+      if v_posnr is initial or v_posnr eq <fs_sales_order>-posnr. 
+        v_posnr = <fs_sales_order>-posnr. 
+ 
+        if v_etenr_atual is initial or v_etenr_atual ne <fs_sales_order>-etenr. 
+          v_etenr_atual = <fs_sales_order>-etenr. 
+ 
+          if l_atual_vbeln is initial or l_atual_vbeln eq <fs_sales_order>-vbeln. 
+            l_atual_vbeln = <fs_sales_order>-vbeln. 
+ 
+            if v_atual_valor is initial or v_atual_valor <= <fs_sales_order>-wmeng. 
+              v_atual_valor = <fs_sales_order>-wmeng. 
+              <fs_sales_order>-greater_quantity = abap_true. 
+ 
+              read table pt_sales_orders assigning <fs_menor_item> index l_menor_tabix. 
+              if sy-subrc is initial. 
+                clear: <fs_menor_item>-less_quantity. 
+              endif. 
+            endif. 
+          else. 
+ 
+            if v_atual_valor is initial or v_atual_valor <= <fs_sales_order>-wmeng. 
+              v_atual_valor = <fs_sales_order>-wmeng. 
+              <fs_sales_order>-greater_quantity = abap_true. 
+              l_atual_vbeln = <fs_sales_order>-vbeln. 
+            endif. 
+          endif. 
+        endif. 
+      endif. 
+    endif. 
+ 
+    l_menor_tabix = l_tabix. 
+ 
+  endloop. 
+ 
+endform.                    " ZF_MAIOR_QUANTIDADE 
+*&---------------------------------------------------------------------* 
+*&      Form  ZF_MENOR_QUANTIDADE 
+*&---------------------------------------------------------------------* 
+form zf_menor_quantidade  changing pt_sales_orders  type y_t_sales_orders. 
+ 
+  data: v_posnr       type vbap-posnr, 
+        v_atual_valor type vbep-wmeng, 
+        l_tabix       type sy-subrc, 
+        l_menor_tabix type sy-subrc, 
+        v_etenr_atual type vbep-etenr, 
+        l_atual_vbeln type vbak-vbeln. 
+ 
+  field-symbols: <fs_sales_order> like line of pt_sales_orders, 
+                 <fs_menor_item>  like line of pt_sales_orders. 
+ 
+  loop at pt_sales_orders assigning <fs_sales_order>. 
+    l_tabix = sy-tabix. 
+ 
+    if v_posnr is initial or v_posnr ne <fs_sales_order>-posnr. 
+      v_posnr = <fs_sales_order>-posnr. 
+      l_atual_vbeln = <fs_sales_order>-vbeln. 
+      clear: l_menor_tabix, 
+             v_atual_valor, 
+             v_etenr_atual. 
+ 
+      if v_atual_valor is initial or v_atual_valor >= <fs_sales_order>-wmeng. 
+        v_atual_valor = <fs_sales_order>-wmeng. 
+        <fs_sales_order>-less_quantity = abap_true. 
+      endif. 
+ 
+    else. 
+ 
+      if v_posnr is initial or v_posnr eq <fs_sales_order>-posnr. 
+        v_posnr = <fs_sales_order>-posnr. 
+ 
+        if v_etenr_atual is initial or v_etenr_atual ne <fs_sales_order>-etenr. 
+ 
+ 
+ 
+          v_etenr_atual = <fs_sales_order>-etenr. 
+ 
+          if l_atual_vbeln is initial or l_atual_vbeln eq <fs_sales_order>-vbeln. 
+            l_atual_vbeln = <fs_sales_order>-vbeln. 
+            if v_atual_valor is initial or v_atual_valor >= <fs_sales_order>-wmeng. 
+              v_atual_valor = <fs_sales_order>-wmeng. 
+              <fs_sales_order>-less_quantity = abap_true. 
+ 
+              read table pt_sales_orders assigning <fs_menor_item> index l_menor_tabix. 
+              if sy-subrc is initial. 
+                clear: <fs_menor_item>-less_quantity. 
+              endif. 
+ 
+            endif. 
+          else. 
+            if v_atual_valor is initial or v_atual_valor >= <fs_sales_order>-wmeng. 
+              v_atual_valor = <fs_sales_order>-wmeng. 
+              <fs_sales_order>-less_quantity = abap_true. 
+              l_atual_vbeln = <fs_sales_order>-vbeln. 
+ 
+            endif. 
+ 
+          endif. 
+        endif. 
+      endif. 
+    endif. 
+    l_menor_tabix = l_tabix. 
+  endloop. 
+ 
+endform.                    " ZF_MENOR_QUANTIDADE 
